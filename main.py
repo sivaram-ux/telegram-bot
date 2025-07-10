@@ -115,6 +115,7 @@ async def collect_questions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💬 Any preferences/answers to the questions? (or type 'no')")
     return ASK_FOLLOWUP + 11
 
+
 async def collect_answers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     preferences = update.message.text
     if preferences.lower() == "no":
