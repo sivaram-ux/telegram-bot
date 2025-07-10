@@ -16,14 +16,11 @@ from prompt_engine import (
 
 from keys import TELEGRAM_BOT_TOKEN
 
-# --- Constants ---
 ASK_PROMPT, ASK_MODE, ASK_FOLLOWUP, ASK_EXPLAIN = range(4)
 
-# --- Logging ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Helper Functions ---
 def get_send_strategy(response_text: str, filename: str = "response.txt"):
     MAX_LENGTH = 4000
     if len(response_text) <= MAX_LENGTH:
@@ -56,7 +53,6 @@ def format_explanation_to_messages(data: dict) -> list[str]:
 
     return messages
 
-# --- Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Welcome! Please send your raw prompt.")
     return ASK_PROMPT
@@ -78,14 +74,16 @@ async def handle_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
         optimized += chunk.content
 
     context.user_data["optimized"] = optimized
+    context.user_data["prompt_id"] = "telegram-user"  # default
 
     if os.environ.get("SUPABASE_KEY") and os.environ.get("SUPABASE_URL"):
-        log_prompt_to_supabase(
+        prompt_id = log_prompt_to_supabase(
             original_prompt=prompt,
             optimized_prompt=optimized,
             mode=mode,
             model_used="gemini-2.5-flash"
         )
+        context.user_data["prompt_id"] = prompt_id  # store real ID
 
     strategy, output = get_send_strategy(optimized)
     if strategy == "text":
@@ -131,7 +129,7 @@ async def collect_answers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response += chunk.content
 
     save_deep_research_questions_separately(
-        prompt_id="telegram-user",
+        prompt_id=context.user_data.get("prompt_id", "telegram-user"),
         questions_asked=questions,
         answers=response,
         preferences=preferences
@@ -161,7 +159,10 @@ async def handle_explain(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         parsed = extract_json_from_response(explanation)
         if parsed:
-            save_explanation_separately("telegram-user", parsed)
+            save_explanation_separately(
+                context.user_data.get("prompt_id", "telegram-user"),
+                parsed
+            )
             messages = format_explanation_to_messages(parsed)
             for msg in messages:
                 await update.message.reply_text(msg, parse_mode="Markdown")
@@ -175,7 +176,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Canceled.")
     return ConversationHandler.END
 
-# --- Bot Entry Point ---
 def main():
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
