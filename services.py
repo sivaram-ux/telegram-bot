@@ -1,7 +1,4 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
+
 import os
 from prompt_engine import (
     optimize_prompt,
@@ -12,37 +9,6 @@ from prompt_engine import (
     save_explanation_separately,
     extract_json_from_response
 )
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# === Models ===
-
-class OptimizeRequest(BaseModel):
-    prompt: str
-    mode: str
-
-class ExplainRequest(BaseModel):
-    original_prompt: str
-    optimized_prompt: str
-    mode: str
-
-class ResearchFollowupRequest(BaseModel):
-    prompt_id: str
-    questions_asked: str
-    answers: str
-    preferences: str = None
-
-class FeedbackLogRequest(BaseModel):
-    prompt_id: str
-    explanation_json: dict
 
 async def optimize_endpoint(prompt: str,mode: str):
     optimized = ""
