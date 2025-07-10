@@ -2,3 +2,4 @@ aiohttp
 python-telegram-bot==20.7
 langchain_google_genai
 supabase
+httpx==0.24.1
