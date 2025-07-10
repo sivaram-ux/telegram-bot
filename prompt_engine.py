@@ -1,19 +1,15 @@
 import os
-#from langchain.chat_models import init_chat_model,ChatGoogleGenerativeAI
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 #from keys import key,SUPABASE_KEY,SUPABASE_URL#Get these from environment variables
 
 # Secure API Key Input
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-
 # Init model
-#model = init_chat_model("gemini-2.0-flash", model_provider="google_genai")
-model = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",
-    api_key=os.environ["GOOGLE_API_KEY"]
-)
+model = init_chat_model("gemini-2.5-flash", model_provider="google_genai")
+
 modes = {
     "deep_research":"the prompt will be used by deep researching agent, it should enhance the quality such I get best research report covering each and every detail",
     "clarity": "Rewrite the prompt so that the LLM will produce an extremely clear and unambiguous response. Eliminate vagueness, add specific details, and enforce a logical structure.",
@@ -185,6 +181,9 @@ from supabase import create_client
 import datetime
 import uuid
 
+from functools import lru_cache
+
+
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def log_prompt_to_supabase(
@@ -326,3 +325,5 @@ if __name__ == "__main__":
                 save_explanation_separately(prompt_id,prompt_feedback)
         else:
             print("❌ Failed to extract prompt feedback.")
+        
+
