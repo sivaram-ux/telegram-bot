@@ -185,6 +185,7 @@ from fastapi import FastAPI
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 🚀 Set Telegram Webhook on startup
+    await telegram_app.initialize()
     await telegram_app.bot.set_webhook(f"{BASE_URL}/webhook/{WEBHOOK_SECRET}")
     yield
     # (Optional) Cleanup logic on shutdown goes here
@@ -219,6 +220,7 @@ async def health_check():
 @app.post(f"/webhook/{WEBHOOK_SECRET}")
 async def telegram_webhook(request: Request):
     data = await request.json()
+    logger.info("📩 Webhook received: %s", data)
     update = Update.de_json(data, telegram_app.bot)
     await telegram_app.update_queue.put(update)
     return {"ok": True}
