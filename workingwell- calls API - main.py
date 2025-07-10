@@ -1,29 +1,26 @@
-import os
 import logging
+import aiohttp
 from io import StringIO
-
-from telegram import Update, InputFile
+from telegram import Update, InputFile, ReplyKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler,
-    ConversationHandler, ContextTypes, filters
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ConversationHandler,
+    ContextTypes,
+    filters,
 )
+import os
+from services import *
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN") # put your bot token here
 
-from prompt_engine import (
-    optimize_prompt, explain_prompt, deep_research_questions,
-    log_prompt_to_supabase, save_deep_research_questions_separately,
-    save_explanation_separately, extract_json_from_response
-)
-
-from keys import TELEGRAM_BOT_TOKEN
-
-# --- Constants ---
 ASK_PROMPT, ASK_MODE, ASK_FOLLOWUP, ASK_EXPLAIN = range(4)
 
-# --- Logging ---
+API_BASE = "https://promptwise-backend-2-0.onrender.com"  # your backend
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Helper Functions ---
 def get_send_strategy(response_text: str, filename: str = "response.txt"):
     MAX_LENGTH = 4000
     if len(response_text) <= MAX_LENGTH:
@@ -36,27 +33,39 @@ def get_send_strategy(response_text: str, filename: str = "response.txt"):
         return "file", InputFile(buffer, filename)
 
 def format_explanation_to_messages(data: dict) -> list[str]:
-    messages = ["🧠 *Prompt Feedback Analysis*"]
+    messages = []
+    messages.append("🧠 *Prompt Feedback Analysis*")
 
     strengths = data.get("original_prompt", {}).get("strengths", [])
     if strengths:
-        messages.append("👍 *Original Prompt Strengths*\n" + "\n".join(f"• {s}" for s in strengths))
+        text = "👍 *Original Prompt Strengths*"
+        for s in strengths:
+            text += f"\\n• {s}"
+        messages.append(text)
 
     weaknesses = data.get("original_prompt", {}).get("weaknesses", [])
     if weaknesses:
-        messages.append("👎 *Original Prompt Weaknesses*\n" + "\n".join(f"• {w}" for w in weaknesses))
+        text = "👎 *Original Prompt Weaknesses*"
+        for w in weaknesses:
+            text += f"\\n• {w}"
+        messages.append(text)
 
     improvements = data.get("llm_understanding_improvements", [])
     if improvements:
-        messages.append("🧠 *What the LLM Understands Better Now*\n" + "\n".join(f"• {u}" for u in improvements))
+        text = "🧠 *What the LLM Understands Better Now*"
+        for u in improvements:
+            text += f"\\n• {u}"
+        messages.append(text)
 
     tips = data.get("tips_for_future_prompts", [])
     if tips:
-        messages.append("💡 *Tips for Future Prompts*\n" + "\n".join(f"• {t}" for t in tips))
+        text = "💡 *Tips for Future Prompts*"
+        for t in tips:
+            text += f"\\n• {t}"
+        messages.append(text)
 
     return messages
 
-# --- Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Welcome! Please send your raw prompt.")
     return ASK_PROMPT
@@ -73,21 +82,16 @@ async def handle_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("⚙️ Optimizing your prompt...")
 
-    optimized = ""
-    for chunk in optimize_prompt(prompt, mode):
-        optimized += chunk.content
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f"{API_BASE}/optimize", json={"prompt": prompt, "mode": mode}) as resp:
+            if resp.status != 200:
+                error_text = await resp.text()
+                await update.message.reply_text(f"❌ Error: {error_text}")
+                return ConversationHandler.END
+            result = await resp.json()
+            context.user_data["optimized"] = result["optimized_prompt"]
 
-    context.user_data["optimized"] = optimized
-
-    if os.environ.get("SUPABASE_KEY") and os.environ.get("SUPABASE_URL"):
-        log_prompt_to_supabase(
-            original_prompt=prompt,
-            optimized_prompt=optimized,
-            mode=mode,
-            model_used="gemini-2.5-flash"
-        )
-
-    strategy, output = get_send_strategy(optimized)
+    strategy, output = get_send_strategy(context.user_data["optimized"])
     if strategy == "text":
         await update.message.reply_text(output)
     elif strategy == "chunks":
@@ -123,50 +127,58 @@ async def collect_answers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         preferences = ""
     context.user_data["preferences"] = preferences
 
-    questions = context.user_data["questions_asked"]
-    answers = context.user_data["optimized"]
+    payload = {
+        "prompt_id": "telegram-user",
+        "questions_asked": context.user_data["questions_asked"],
+        "answers": context.user_data["optimized"],
+        "preferences": preferences
+    }
 
-    response = ""
-    for chunk in deep_research_questions(questions, answers, preferences):
-        response += chunk.content
-
-    save_deep_research_questions_separately(
-        prompt_id="telegram-user",
-        questions_asked=questions,
-        answers=response,
-        preferences=preferences
-    )
-
-    strategy, output = get_send_strategy(response)
-    if strategy == "text":
-        await update.message.reply_text(output)
-    elif strategy == "chunks":
-        for part in output:
-            await update.message.reply_text(part)
-    else:
-        await update.message.reply_document(output)
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f"{API_BASE}/followup", json=payload) as resp:
+            if resp.status != 200:
+                await update.message.reply_text("❌ Error in follow-up.")
+                return ConversationHandler.END
+            result = await resp.json()
+            followup = result.get("followup_response", "")
+            strategy, output = get_send_strategy(followup)
+            if strategy == "text":
+                await update.message.reply_text(output)
+            elif strategy == "chunks":
+                for part in output:
+                    await update.message.reply_text(part)
+            else:
+                await update.message.reply_document(output)
 
     await update.message.reply_text("📘 Want explanation of the optimization? (yes/no)")
     return ASK_EXPLAIN
 
 async def handle_explain(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text.lower().startswith("y"):
-        prompt = context.user_data["prompt"]
-        optimized = context.user_data["optimized"]
-        mode = context.user_data["mode"]
-
-        explanation = ""
-        for chunk in explain_prompt(prompt, optimized, mode):
-            explanation += chunk.content
-
-        parsed = extract_json_from_response(explanation)
-        if parsed:
-            save_explanation_separately("telegram-user", parsed)
-            messages = format_explanation_to_messages(parsed)
-            for msg in messages:
-                await update.message.reply_text(msg, parse_mode="Markdown")
-        else:
-            await update.message.reply_text(explanation)
+        payload = {
+            "original_prompt": context.user_data["prompt"],
+            "optimized_prompt": context.user_data["optimized"],
+            "mode": context.user_data["mode"]
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"{API_BASE}/explain", json=payload) as resp:
+                if resp.status != 200:
+                    await update.message.reply_text("❌ Explanation request failed.")
+                    return ConversationHandler.END
+                result = await resp.json()
+                explanation = result.get("explanation", "")
+                try:
+                    import json, re
+                    json_text = re.search(r'{.*}', explanation, re.DOTALL)
+                    if json_text:
+                        parsed = json.loads(json_text.group(0))
+                        messages = format_explanation_to_messages(parsed)
+                        for msg in messages:
+                            await update.message.reply_text(msg, parse_mode="Markdown")
+                    else:
+                        await update.message.reply_text(explanation)
+                except Exception:
+                    await update.message.reply_text(explanation)
     else:
         await update.message.reply_text("✅ Done. You can send another prompt with /start.")
     return ConversationHandler.END
@@ -175,7 +187,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Canceled.")
     return ConversationHandler.END
 
-# --- Bot Entry Point ---
 def main():
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
