@@ -14,7 +14,7 @@ from prompt_engine import (
     save_explanation_separately, extract_json_from_response
 )
 
-from keys import TELEGRAM_BOT_TOKEN
+TELEGRAM_BOT_TOKEN=os.environ.get("TELEGRAM_BOT_TOKEN")
 
 ASK_PROMPT, ASK_MODE, ASK_FOLLOWUP, ASK_EXPLAIN = range(4)
 
