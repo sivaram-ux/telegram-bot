@@ -214,7 +214,7 @@ conv_handler = ConversationHandler(
 )
 telegram_app.add_handler(conv_handler)
 
-@app.get("/")
+@app.get("/health")
 async def health_check():
     return {"status": "ok", "message": "Bot is running"}
 
