@@ -179,7 +179,18 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ========== FASTAPI SERVER ==========
 
-app = FastAPI()
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 🚀 Set Telegram Webhook on startup
+    await telegram_app.bot.set_webhook(f"{BASE_URL}/webhook/{WEBHOOK_SECRET}")
+    yield
+    # (Optional) Cleanup logic on shutdown goes here
+
+app = FastAPI(lifespan=lifespan)
+
 telegram_app = (
     ApplicationBuilder()
     .token(TELEGRAM_BOT_TOKEN)
@@ -212,6 +223,3 @@ async def telegram_webhook(request: Request):
     await telegram_app.update_queue.put(update)
     return {"ok": True}
 
-@app.on_event("startup")
-async def on_startup():
-    await telegram_app.bot.set_webhook(f"{BASE_URL}/webhook/{WEBHOOK_SECRET}")
