@@ -216,7 +216,19 @@ telegram_app.add_handler(conv_handler)
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "message": "Bot is running"}
+    return {"status": "ok"}
+
+from fastapi.responses import HTMLResponse
+
+@app.get("/", response_class=HTMLResponse)
+async def home():
+    return """
+    <h1>🤖 PromptWise Telegram Bot is up!</h1>
+    <p><a href="https://stats.uptimerobot.com/sMXRpdDsTK" target="_blank">
+        📊 View Uptime Status
+    </a></p>
+    """
+
 
 @app.post(f"/webhook/{WEBHOOK_SECRET}")
 async def telegram_webhook(request: Request):
