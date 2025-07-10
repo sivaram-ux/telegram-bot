@@ -182,7 +182,15 @@ import datetime
 import uuid
 
 from functools import lru_cache
+import gotrue._sync.gotrue_base_api as base_api
+from httpx import Client as HTTPXClient
 
+def _patched_init(self, url, headers=None, **kwargs):
+    self._url = url
+    self._headers = headers or {}
+    self._http_client = HTTPXClient(headers=self._headers)
+
+base_api.SyncGoTrueBaseAPI.__init__ = _patched_init
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
