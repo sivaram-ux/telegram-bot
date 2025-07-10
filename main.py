@@ -187,6 +187,7 @@ async def lifespan(app: FastAPI):
     # 🚀 Set Telegram Webhook on startup
     await telegram_app.initialize()
     await telegram_app.bot.set_webhook(f"{BASE_URL}/webhook/{WEBHOOK_SECRET}")
+    await telegram_app.start()  # ← REQUIRED to process updates!
     yield
     # (Optional) Cleanup logic on shutdown goes here
 
