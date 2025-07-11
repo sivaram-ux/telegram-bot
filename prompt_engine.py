@@ -45,7 +45,7 @@ def optimize_prompt(raw_prompt, mode="clarity"):
 
     Your task is to transform a raw, basic user query into a fully optimized, detailed, and highly effective prompt designed for use with deep researching agents from gemini or chatgpt.
 
-    🎯 Your optimized prompt must retain the original intent but dramatically expand its scope, specificity, and structure.
+    🎯 Your optimized prompt must retain the original intent.
 
     ⚠️ CRITICAL INSTRUCTION: Do NOT output any commentary, apologies, or explanations. Output ONLY the **final refined prompt** as plain text.
     """.strip()
@@ -57,28 +57,55 @@ def optimize_prompt(raw_prompt, mode="clarity"):
 
     Your task is to transform a raw, basic user query into a fully optimized, detailed, and highly effective prompt designed for use with advanced LLMs like Gemini 1.5 Pro or Claude 3 Opus.
 
-    🎯 Your optimized prompt must retain the original intent but dramatically expand its scope, specificity, and structure.
+    🎯 Your optimized prompt must retain the original intent.
 
-    🧠 Apply the following techniques where appropriate:
+    🧠 Apply the following techniques if they are appropiate(not necessary to use each and everyone):
 
-    1. **Role & Persona** — Assign an expert identity to the AI (e.g., “You are a veteran data scientist with 15 years of industry experience.”)
-    2. **Context** — Add background info or assumptions to frame the task meaningfully.
-    3. **Audience** — Define who the output is intended for (e.g., beginner, developer, executive).
-    4. **Structure & Format** — Specify how the answer should be organized (e.g., "Use a three-part breakdown with bullets and a markdown table").
-    5. **Goals & Intent** — State what the user wants to achieve (e.g., “The goal is to create a step-by-step learning plan...”).
-    6. **Key Elements** — Include concepts, examples, analogies, pitfalls, comparisons, and optional depth levels.
-    7. **Constraints** — Add exclusions if appropriate (e.g., “Do not include political commentary”).
+    1. Role & Persona — Assign an expert identity to the AI (e.g., “You are a veteran data scientist with 15 years of industry experience.”)
+    2. Context — Add background info or assumptions to frame the task meaningfully.
+    3. Audience — Define who the output is intended for (e.g., beginner, developer, executive).
+    4. Structure & Format — Specify how the answer should be organized (e.g., "Use a three-part breakdown with bullets and a markdown table").
+    5. Goals & Intent — State what the user wants to achieve (e.g., “The goal is to create a step-by-step learning plan...”).
+    6. Key Elements — Include concepts, examples, analogies, pitfalls, comparisons, and optional depth levels.
+    7. Constraints — Add exclusions if appropriate (e.g., “Do not include political commentary”).
 
     🎯 MOST IMPORTANT INSTRUCTION: **{modes[mode]}**
 
     ⚠️ CRITICAL INSTRUCTION: Do NOT output any commentary, apologies, or explanations. Output ONLY the **final refined prompt** as plain text.
     """.strip()
     )
+    else:
+        system = SystemMessage(
+        f"""
+    Act as a world-class prompt engineering expert.
+
+    Your task is to transform a raw, basic user query into a fully optimized, detailed, and highly effective prompt designed for use with advanced LLMs like Gemini 1.5 Pro or Claude 3 Opus.
+
+    🎯 Your optimized prompt must retain the original intent.
+
+    🧠 Apply the following techniques if they are appropiate(not necessary to follow each and everyone):
+
+    1. Role & Persona — Assign an expert identity to the AI (e.g., “You are a veteran data scientist with 15 years of industry experience.”)
+    2. Context — Add background info or assumptions to frame the task meaningfully.
+    3. Audience — Define who the output is intended for (e.g., beginner, developer, executive).
+    4. Structure & Format — Specify how the answer should be organized (e.g., "Use a three-part breakdown with bullets and a markdown table").
+    5. Goals & Intent — State what the user wants to achieve (e.g., “The goal is to create a step-by-step learning plan...”).
+    6. Key Elements — Include concepts, examples, analogies, pitfalls, comparisons, and optional depth levels.
+    7. Constraints — Add exclusions if appropriate (e.g., “Do not include political commentary”).
+
+    🎯 MOST IMPORTANT INSTRUCTION: **{mode}**
+
+    ⚠️ CRITICAL INSTRUCTION: Do NOT output any commentary, apologies, or explanations. Output ONLY the **final refined prompt** as plain text.
+    """.strip()
+    )
+
 
     user = HumanMessage(f"Optimise this: {raw_prompt}")
     return model.stream([system, user])
 
 def explain_prompt(original_prompt, optimized_prompt, mode="clarity"):
+    if mode in modes:
+        mode=modes[mode]
     explanation_request = HumanMessage(f"""
 Act as a world-class prompt engineering expert.
 
@@ -88,7 +115,7 @@ Compare the following two prompts and return a structured analysis in **valid JS
 "{original_prompt}"
 
 🎯Final Goal of optimized prompt:
-"{modes[mode]}"
+"{mode}"
 
 ✨ Optimized Prompt:
 "{optimized_prompt}"
@@ -141,9 +168,9 @@ def deep_research_questions(original_prompt,optimised_prompt,questions_asked,pre
         )
     else:
         new_message_from_human= HumanMessage(
-            f"""The model has asked the following questions:{questions_asked}
+            f"""The model has asked the following questions to prepare the report:{questions_asked}
             Please answer them generally
-            ⚠️ CRITICAL INSTRUCTION: Do NOT output any commentary, apologies, or explanations. Output ONLY the answers as plain text.
+            ⚠️ CRITICAL INSTRUCTION: Do NOT output any commentary, apologies, or explanations. Output ONLY the answers to questions asked by model as plain text.
             """.strip()
         )
     system = SystemMessage(
